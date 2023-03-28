@@ -44,7 +44,7 @@ class HelpScreen extends StatelessWidget {
                             splashFactory: NoSplash.splashFactory,
                           ),
                           onPressed: () {
-                            Navigator.of(context).push(
+                            Navigator.of(context).pushReplacement(
                               MaterialPageRoute(
                                 builder: (context) => const HomeScreen(),
                               ),
