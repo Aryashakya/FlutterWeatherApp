@@ -21,7 +21,6 @@ Future<Map?> getWeather(String location) async {
       'temp_icon': jsonResponse['current']['condition']['icon']
     };
   } else {
-    print('Request failed with status: ${response.statusCode}.');
     return null;
   }
 }
