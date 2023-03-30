@@ -8,6 +8,31 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'help_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+String buttonText = 'Save';
+String? location;
+String? temperatureText;
+String? temperatureCelsius;
+String? temperatureIconUrl;
+bool _isLoading = false;
+
+saveWeather(String location, String temperatureText, String temperatureCelsius,
+    String temperatureIconUrl) async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  await prefs.setString("location", location);
+  await prefs.setString("temperatureText", temperatureText);
+  await prefs.setString("temperatureCelsius", temperatureCelsius);
+  await prefs.setString("temperatureIconUrl", temperatureIconUrl);
+}
+
+getSavedWeather() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  location = prefs.getString("location");
+  temperatureText = prefs.getString("temperatureText");
+  temperatureCelsius = prefs.getString("temperatureCelsius");
+  temperatureIconUrl = prefs.getString("temperatureIconUrl");
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,12 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final Connectivity _connectivity = Connectivity();
   late StreamSubscription<ConnectivityResult> _connectivitySubscription;
   final TextEditingController _locationController = TextEditingController();
-  String buttonText = 'Save';
-  String? location;
-  String? temperatureText;
-  String? temperatureCelsius;
-  String? temperatureIconUrl;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -38,18 +57,35 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    initConnectivity();
-
+    initialize();
     _connectivitySubscription =
         _connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
+  }
+
+  initialize() async {
+    await initConnectivity();
+    await getSavedWeather();
     if (mounted) {
-      print(_connectionStatus.toString());
-      setState(() {
-        _isLoading = true;
-      });
-      if (_locationController.text.isEmpty && location == null&&
+
+      if (_locationController.text.isEmpty &&
+          location == null &&
           _connectionStatus != ConnectivityResult.none) {
-        getCurrentData();
+        setState(() {
+          _isLoading = true;
+        });
+        await getCurrentData();
+      }
+      if (location != null) {
+        _locationController.text = location!;
+      }
+      if (_locationController.text == location) {
+        setState(() {
+          buttonText = 'Update';
+        });
+      } else {
+        setState(() {
+          buttonText = 'Save';
+        });
       }
     }
   }
@@ -63,13 +99,19 @@ class _HomeScreenState extends State<HomeScreen> {
           '${currentPosition.latitude},${currentPosition.longitude}');
     }
     if (data != null) {
-      setState(() {
-        location = data!['location'];
-        temperatureText = data['temp_text'];
-        temperatureCelsius = data['temp_c'].toString();
-        temperatureIconUrl = 'http://${data['temp_icon'].substring(2)}';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          location = data!['location'];
+          temperatureText = data['temp_text'];
+          temperatureCelsius = data['temp_c'].toString();
+          temperatureIconUrl = 'http://${data['temp_icon'].substring(2)}';
+          _isLoading = false;
+        });
+        if (location != null) {
+          await saveWeather(location!, temperatureText!, temperatureCelsius!,
+              temperatureIconUrl!);
+        }
+      }
     }
   }
 
@@ -93,10 +135,23 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _connectionStatus = result;
     });
-
+    await getSavedWeather();
     if (_connectionStatus != ConnectivityResult.none &&
-        _locationController.text.isEmpty) {
-      getCurrentData();
+        _locationController.text.isEmpty &&
+        location == null) {
+      await getCurrentData();
+    }
+    if (location != null) {
+      _locationController.text = location!;
+    }
+    if (_locationController.text == location) {
+      setState(() {
+        buttonText = 'Update';
+      });
+    } else {
+      setState(() {
+        buttonText = 'Save';
+      });
     }
   }
 
@@ -199,7 +254,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               Map? data;
                               data = await getWeather(_locationController.text);
                               if (data != null) {
-                                print('data: $data');
                                 setState(() {
                                   location = data!['location'];
                                   temperatureText = data['temp_text'];
@@ -209,6 +263,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                       'http://${data['temp_icon'].substring(2)}';
                                   _isLoading = false;
                                 });
+                                if (location != null) {
+                                  await saveWeather(location!, temperatureText!,
+                                      temperatureCelsius!, temperatureIconUrl!);
+                                }
                               }
                               if (data == null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -234,7 +292,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(
                       height: 80.0,
                     ),
-                    (_isLoading && location == null)
+                    (_isLoading || location == null)
                         ? const Center(
                             child: CircularProgressIndicator.adaptive())
                         : Column(
